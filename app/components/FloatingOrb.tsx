@@ -16,6 +16,11 @@ function GlassPanel({ mousePosition }: GlassPanelProps) {
 
   const autoRotation = useRef({ x: 0, y: 0, z: 0 });
   const shimmerPhase = useRef(0);
+  
+  // Touch interaction state
+  const touchStart = useRef({ x: 0, y: 0 });
+  const touchRotation = useRef({ x: 0, y: 0 });
+  const isTouching = useRef(false);
 
   /**
    * LAYER 1 – inner fog (now neutral white rather than blue)
@@ -212,14 +217,16 @@ function GlassPanel({ mousePosition }: GlassPanelProps) {
   useFrame((_state, delta) => {
     if (!crystalRef.current) return;
 
-    // Continuous rotation on all axes for crystal effect
-    autoRotation.current.x += delta * 0.2;
-    autoRotation.current.y += delta * 0.35;
-    autoRotation.current.z += delta * 0.15;
+    // Continuous rotation on all axes for crystal effect (only when not touching)
+    if (!isTouching.current) {
+      autoRotation.current.x += delta * 0.2;
+      autoRotation.current.y += delta * 0.35;
+      autoRotation.current.z += delta * 0.15;
+    }
 
-    // Apply rotation with mouse parallax influence
-    crystalRef.current.rotation.x = autoRotation.current.x + mousePosition.y * 0.3;
-    crystalRef.current.rotation.y = autoRotation.current.y + mousePosition.x * 0.3;
+    // Apply rotation with mouse parallax or touch influence
+    crystalRef.current.rotation.x = autoRotation.current.x + mousePosition.y * 0.3 + touchRotation.current.x;
+    crystalRef.current.rotation.y = autoRotation.current.y + mousePosition.x * 0.3 + touchRotation.current.y;
     crystalRef.current.rotation.z = autoRotation.current.z;
 
     // Gentle floating animation
@@ -245,10 +252,54 @@ function GlassPanel({ mousePosition }: GlassPanelProps) {
     }
   });
 
+  // Touch event handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    isTouching.current = true;
+    touchStart.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isTouching.current) return;
+
+    const deltaX = e.touches[0].clientX - touchStart.current.x;
+    const deltaY = e.touches[0].clientY - touchStart.current.y;
+
+    // Apply smooth rotation based on touch movement
+    touchRotation.current.y = deltaX * 0.01;
+    touchRotation.current.x = -deltaY * 0.01;
+  };
+
+  const handleTouchEnd = () => {
+    isTouching.current = false;
+    // Smoothly reset touch rotation
+    touchRotation.current.x *= 0.95;
+    touchRotation.current.y *= 0.95;
+  };
+
   return (
     <group>
       {/* GLASS CRYSTAL */}
-      <mesh ref={crystalRef} geometry={crystalGeometry} castShadow receiveShadow>
+      <mesh 
+        ref={crystalRef} 
+        geometry={crystalGeometry} 
+        castShadow 
+        receiveShadow
+        onPointerDown={(e) => {
+          if ('touches' in e.nativeEvent) {
+            handleTouchStart(e.nativeEvent as unknown as React.TouchEvent);
+          }
+        }}
+        onPointerMove={(e) => {
+          if ('touches' in e.nativeEvent && isTouching.current) {
+            handleTouchMove(e.nativeEvent as unknown as React.TouchEvent);
+          }
+        }}
+        onPointerUp={handleTouchEnd}
+        onPointerCancel={handleTouchEnd}
+      >
         <MeshTransmissionMaterial
           backside
           samples={32}
