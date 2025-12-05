@@ -32,6 +32,35 @@
   --glow-strong: rgba(156, 163, 175, 0.22);
 }
 
+/* Light mode */
+:root.light {
+  /* Base */
+  --background: #FDFBF9;           /* white matte */
+  --foreground: #1a1a1a;           /* dark text */
+
+  /* Surfaces (glass panels, cards) */
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-soft: rgba(255, 255, 255, 0.75);
+
+  /* Accents */
+  --accent: #1a1a1a;
+  --accent-soft: #4a4a4a;
+  --accent-alt: #6a6a6a;
+
+  /* Text + borders */
+  --muted: #6a6a6a;
+  --border-subtle: rgba(26, 26, 26, 0.08);
+
+  /* Text tokens */
+  --vp-text-strong: #1a1a1a;
+  --vp-text: #2a2a2a;
+  --vp-text-soft: #6a6a6a;
+
+  /* Glows / special effects */
+  --glow-primary: rgba(26, 26, 26, 0.06);
+  --glow-strong: rgba(100, 100, 100, 0.08);
+}
+
 /* Tailwind tokens stay the same */
 @theme inline {
   --color-background: var(--background);
@@ -73,7 +102,25 @@ body {
       rgba(156, 163, 175, 0.18),
       transparent 55%
     ),
-    #050608;
+    var(--background);
+  
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light mode body adjustments */
+:root.light body {
+  background:
+    radial-gradient(
+      at 10% 0%,
+      rgba(26, 26, 26, 0.04),
+      transparent 55%
+    ),
+    radial-gradient(
+      at 90% 100%,
+      rgba(100, 100, 100, 0.06),
+      transparent 55%
+    ),
+    var(--background);
 }
 
 /* Reusable glass panel */

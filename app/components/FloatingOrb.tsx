@@ -10,19 +10,12 @@ interface GlassPanelProps {
 }
 
 function GlassPanel({ mousePosition }: GlassPanelProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const innerGlowRef = useRef<THREE.Mesh>(null);
-  const rimLightRef = useRef<THREE.Mesh>(null);
+  const crystalRef = useRef<THREE.Mesh>(null);
+  const shadowRef = useRef<THREE.Mesh>(null);
   const shimmerLightRef = useRef<THREE.PointLight>(null);
 
-  const targetRotation = useRef({ x: 0, y: 0 });
-  const currentRotation = useRef({ x: 0, y: 0 });
-  const targetPosition = useRef({ x: 0, y: 0 });
-  const currentPosition = useRef({ x: 0, y: 0 });
-
-  const breathingPhase = useRef(0);
+  const autoRotation = useRef({ x: 0, y: 0, z: 0 });
   const shimmerPhase = useRef(0);
-  const autoRotation = useRef(0);
 
   /**
    * LAYER 1 – inner fog (now neutral white rather than blue)
@@ -94,6 +87,42 @@ function GlassPanel({ mousePosition }: GlassPanelProps) {
   }, []);
 
   /**
+   * Background texture - coding themed pattern
+   */
+  const backgroundTexture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 1024;
+    const ctx = canvas.getContext("2d")!;
+
+    // Dark subtle gradient
+    const gradient = ctx.createRadialGradient(512, 512, 100, 512, 512, 600);
+    gradient.addColorStop(0, "rgba(20, 20, 30, 0.15)");
+    gradient.addColorStop(1, "rgba(10, 10, 20, 0.05)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Add subtle code-like lines pattern
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.lineWidth = 1;
+    
+    for (let i = 0; i < 30; i++) {
+      const y = Math.random() * canvas.height;
+      const x = Math.random() * 200 + 150;
+      const length = Math.random() * 400 + 200;
+      
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + length, y);
+      ctx.stroke();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
+
+  /**
    * LAYER 4 – Frozen code texture (lines of code trapped in glass)
    */
   const codeTexture = useMemo(() => {
@@ -105,30 +134,48 @@ function GlassPanel({ mousePosition }: GlassPanelProps) {
     // Transparent background
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Code snippets - clean and minimal
+    // Code snippets - Mart OS branding
     const codeLines = [
-      "const vision = {",
-      "  future: true",
-      "};",
+      "Mart OS v1.0",
+      "",
+      "const mart = { role: \"Software Developer\" }",
+      "",
+      "> crafting interfaces…",
     ];
 
     // Perfect rendering settings
-    ctx.font = "bold 100px 'Consolas', 'Courier New', monospace";
     ctx.fillStyle = "rgba(255, 255, 255, 1)";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     
     // Stronger outline for maximum contrast
     ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
-    ctx.lineWidth = 10;
     ctx.lineJoin = "round";
     ctx.miterLimit = 2;
 
-    const lineHeight = 120;
+    const lineHeight = 110;
     const startY = canvas.height / 2 - ((codeLines.length - 1) * lineHeight) / 2;
 
     codeLines.forEach((line, i) => {
+      if (line === "") return; // Skip empty lines
+      
       const y = startY + i * lineHeight;
+      
+      // Different sizes for visual hierarchy
+      if (i === 0) {
+        // Title - larger
+        ctx.font = "bold 120px 'Consolas', 'Courier New', monospace";
+        ctx.lineWidth = 12;
+      } else if (i === 4) {
+        // Subtitle - italic
+        ctx.font = "italic bold 80px 'Consolas', 'Courier New', monospace";
+        ctx.lineWidth = 8;
+      } else {
+        // Code line - regular
+        ctx.font = "bold 85px 'Consolas', 'Courier New', monospace";
+        ctx.lineWidth = 9;
+      }
+      
       // Draw outline first
       ctx.strokeText(line, canvas.width / 2, y);
       // Then fill
@@ -143,203 +190,153 @@ function GlassPanel({ mousePosition }: GlassPanelProps) {
     return texture;
   }, []);
 
-  useFrame((_state, delta) => {
-    if (!meshRef.current) return;
-
-    // Auto-rotation for 3D depth showcase
-    autoRotation.current += delta * 0.15;
-
-    // Parallax rotation combined with auto-rotation
-    targetRotation.current.x = mousePosition.y * 0.08;
-    targetRotation.current.y = mousePosition.x * 0.12 + autoRotation.current;
-
-    currentRotation.current.x +=
-      (targetRotation.current.x - currentRotation.current.x) * 0.05;
-    currentRotation.current.y +=
-      (targetRotation.current.y - currentRotation.current.y) * 0.05;
-
-    meshRef.current.rotation.x = currentRotation.current.x;
-    meshRef.current.rotation.y = currentRotation.current.y;
-
-    // Parallax position
-    targetPosition.current.x = mousePosition.x * 0.12;
-    targetPosition.current.y = mousePosition.y * 0.06;
-
-    currentPosition.current.x +=
-      (targetPosition.current.x - currentPosition.current.x) * 0.06;
-    currentPosition.current.y +=
-      (targetPosition.current.y - currentPosition.current.y) * 0.06;
-
-    meshRef.current.position.x = currentPosition.current.x;
-    meshRef.current.position.z = currentPosition.current.x * 0.15;
-
-    // Breathing
-    breathingPhase.current += delta * 0.35;
-    const breathingScale = 1 + Math.sin(breathingPhase.current) * 0.012;
-    meshRef.current.scale.setScalar(breathingScale);
-
-    // Gentle float
-    meshRef.current.position.y =
-      Math.sin(breathingPhase.current * 0.5) * 0.05;
-
-    // Inner glow pulsing
-    if (innerGlowRef.current) {
-      const glowPulse = 0.18 + Math.sin(breathingPhase.current * 1.1) * 0.05;
-      (innerGlowRef.current.material as THREE.MeshBasicMaterial).opacity =
-        glowPulse;
+  // Create custom crystal geometry
+  const crystalGeometry = useMemo(() => {
+    const geometry = new THREE.OctahedronGeometry(0.8, 0);
+    
+    // Modify geometry for more crystalline appearance
+    const positions = geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i);
+      const y = positions.getY(i);
+      const z = positions.getZ(i);
+      
+      // Scale to create crystal-like proportions
+      positions.setXYZ(i, x * 1.1, y * 0.8, z * 0.35);
     }
+    
+    geometry.computeVertexNormals();
+    return geometry;
+  }, []);
 
-    // Rim light subtle motion
-    if (rimLightRef.current) {
-      rimLightRef.current.rotation.z += delta * 0.08;
-      const rimPulse = 0.22 + Math.sin(breathingPhase.current * 0.8) * 0.06;
-      (rimLightRef.current.material as THREE.MeshBasicMaterial).opacity =
-        rimPulse;
+  useFrame((_state, delta) => {
+    if (!crystalRef.current) return;
+
+    // Continuous rotation on all axes for crystal effect
+    autoRotation.current.x += delta * 0.2;
+    autoRotation.current.y += delta * 0.35;
+    autoRotation.current.z += delta * 0.15;
+
+    // Apply rotation with mouse parallax influence
+    crystalRef.current.rotation.x = autoRotation.current.x + mousePosition.y * 0.3;
+    crystalRef.current.rotation.y = autoRotation.current.y + mousePosition.x * 0.3;
+    crystalRef.current.rotation.z = autoRotation.current.z;
+
+    // Gentle floating animation
+    crystalRef.current.position.y = Math.sin(autoRotation.current.y) * 0.08;
+
+    // Sync shadow rotation
+    if (shadowRef.current) {
+      shadowRef.current.rotation.x = crystalRef.current.rotation.x;
+      shadowRef.current.rotation.y = crystalRef.current.rotation.y;
+      shadowRef.current.rotation.z = crystalRef.current.rotation.z;
     }
 
     // Shimmer light sweep
-    shimmerPhase.current += delta * 0.08;
+    shimmerPhase.current += delta * 0.1;
     if (shimmerLightRef.current) {
-      const shimmerX = Math.sin(shimmerPhase.current) * 1.7;
-      const shimmerY = Math.cos(shimmerPhase.current * 0.7) * 1.2;
-      shimmerLightRef.current.position.set(shimmerX, shimmerY, 2);
+      const shimmerX = Math.sin(shimmerPhase.current) * 2;
+      const shimmerY = Math.cos(shimmerPhase.current * 0.6) * 1.5;
+      shimmerLightRef.current.position.set(shimmerX, shimmerY, 2.5);
 
       const shimmerIntensity =
-        Math.max(0, Math.sin(shimmerPhase.current * 2)) * 0.35;
+        Math.max(0, Math.sin(shimmerPhase.current * 1.5)) * 0.5;
       shimmerLightRef.current.intensity = shimmerIntensity;
     }
   });
 
   return (
-    <group rotation={[0.1, -0.25, 0.04]}>
-      {/* MAIN GLASS */}
-      <mesh ref={meshRef} position={[0, 0, 0]} castShadow receiveShadow>
-        <RoundedBox args={[2.5, 2.1, 0.12]} radius={0.2} smoothness={16}>
-          <MeshTransmissionMaterial
-            backside
-            backsideThickness={0.25}
-            samples={8}
-            resolution={768}
-            transmission={0.97}
-            roughness={0.16}
-            thickness={0.22}
-            ior={1.45}
-            chromaticAberration={0.018}
-            anisotropy={0.06}
-            distortion={0.03}
-            distortionScale={0.1}
-            temporalDistortion={0.06}
-            clearcoat={0.95}
-            clearcoatRoughness={0.16}
-            attenuationDistance={1}
-            attenuationColor="#f5f5f7"
-            color="#f9fafb"
-            toneMapped={false}
-          />
-        </RoundedBox>
-
-        {/* Inner fog */}
-        <mesh position={[0, 0, 0.03]}>
-          <planeGeometry args={[2.35, 1.95]} />
-          <meshBasicMaterial
-            map={innerFogTexture}
-            transparent
-            opacity={0.16}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-
-        {/* Vertical gradient */}
-        <mesh position={[0, 0, 0.04]}>
-          <planeGeometry args={[2.35, 1.95]} />
-          <meshBasicMaterial
-            map={gradientTexture}
-            transparent
-            opacity={0.18}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-
-        {/* Inner glow plane */}
-        <mesh ref={innerGlowRef} position={[0, 0, 0.02]}>
-          <planeGeometry args={[2.0, 1.7]} />
-          <meshBasicMaterial
-            color="#f3f4f6"
-            transparent
-            opacity={0.12}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-
-        {/* Rim light plane */}
-        <mesh ref={rimLightRef} position={[-0.55, 0.55, 0.05]}>
-          <planeGeometry args={[1.5, 1.5]} />
-          <meshBasicMaterial
-            map={rimTexture}
-            transparent
-            opacity={0.22}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-
-        {/* Frozen code inside glass - ultra crisp */}
-        <mesh position={[0, 0, 0.001]} rotation={[0, 0, 0]}>
-          <planeGeometry args={[1.9, 1.5]} />
-          <meshBasicMaterial
-            map={codeTexture}
-            transparent
-            opacity={0.9}
-            side={THREE.DoubleSide}
-            depthWrite={false}
-            toneMapped={false}
-            blending={THREE.NormalBlending}
-          />
-        </mesh>
+    <group>
+      {/* GLASS CRYSTAL */}
+      <mesh ref={crystalRef} geometry={crystalGeometry} castShadow receiveShadow>
+        <MeshTransmissionMaterial
+          backside
+          samples={32}
+          resolution={2048}
+          transmission={0.99}
+          roughness={0.02}
+          thickness={0.8}
+          ior={2.4}
+          chromaticAberration={0.025}
+          anisotropy={0.5}
+          distortion={0.05}
+          distortionScale={0.2}
+          temporalDistortion={0.1}
+          clearcoat={1}
+          clearcoatRoughness={0}
+          attenuationDistance={0.3}
+          attenuationColor="#e0f0ff"
+          color="#ffffff"
+          toneMapped={false}
+          flatShading={true}
+        />
       </mesh>
 
-      {/* SOFT SHADOW BEHIND PANEL */}
-      <mesh position={[0.06, -0.06, -0.08]} receiveShadow>
-        <RoundedBox args={[2.55, 2.15, 0.02]} radius={0.21} smoothness={12}>
-          <meshStandardMaterial
-            color="#020617"
-            transparent
-            opacity={0.35}
-            roughness={0.98}
-          />
-        </RoundedBox>
+      {/* LAYERED SHADOW SYSTEM */}
+      {/* Primary shadow */}
+      <mesh ref={shadowRef} geometry={crystalGeometry} position={[0.08, -0.12, -0.15]}>
+        <meshBasicMaterial
+          color="#000000"
+          transparent
+          opacity={0.5}
+          depthWrite={false}
+        />
+      </mesh>
+      
+      {/* Soft diffuse shadow */}
+      <mesh position={[0.05, -0.15, -0.2]}>
+        <circleGeometry args={[1, 32]} />
+        <meshBasicMaterial
+          color="#000000"
+          transparent
+          opacity={0.25}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      
+      {/* Ultra-soft ambient shadow */}
+      <mesh position={[0, -0.18, -0.25]}>
+        <circleGeometry args={[1.3, 32]} />
+        <meshBasicMaterial
+          color="#000000"
+          transparent
+          opacity={0.12}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
       </mesh>
 
-      {/* LIGHT SETUP */}
+      {/* DRAMATIC LIGHTING FOR CRYSTAL */}
       <spotLight
-        position={[1.6, 1.3, 3]}
-        angle={0.45}
-        penumbra={0.9}
-        intensity={0.35}
+        position={[2, 2, 3]}
+        angle={0.5}
+        penumbra={0.8}
+        intensity={1}
         color="#ffffff"
         castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
       />
 
       <pointLight
-        position={[-1.6, 1.6, 2.6]}
-        intensity={0.28}
-        color="#f5f5f7"
+        position={[-2, 1.5, 2]}
+        intensity={0.6}
+        color="#e0f0ff"
       />
 
       <pointLight
         ref={shimmerLightRef}
-        position={[0, 0, 2]}
+        position={[0, 0, 2.5]}
         intensity={0}
         color="#ffffff"
-        distance={3}
+        distance={4}
       />
 
-      {/* subtle edge glows */}
-      <pointLight position={[1.1, 0, 1.4]} intensity={0.08} color="#f9fafb" />
-      <pointLight position={[-1.1, 0, 1.4]} intensity={0.08} color="#f9fafb" />
+      {/* Accent rim lights for crystal facets */}
+      <pointLight position={[1.5, 0.5, 1.5]} intensity={0.3} color="#d0e8ff" />
+      <pointLight position={[-1.5, -0.5, 1.5]} intensity={0.3} color="#e8f0ff" />
+      <pointLight position={[0, 1.8, 1]} intensity={0.4} color="#ffffff" />
     </group>
   );
 }
